@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">documenttracker</string>
+
+    <string-array name="status_options">
+        <item>In Transit</item>
+        <item>Delivered</item>
+        <item>Returned</item>
+        <item>Lost</item>
+    </string-array>
+
 </resources>
