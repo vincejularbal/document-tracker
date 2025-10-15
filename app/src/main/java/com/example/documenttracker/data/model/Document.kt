@@ -8,5 +8,6 @@ data class Document(
     val description: String = "",
     val status: String = "Created",
     val ownerId: String = "",          // user who created it
+    val dateCreated: Long = System.currentTimeMillis(),  // 🕒 timestamp
     val history: MutableList<DocumentHistory> = mutableListOf()
 )

@@ -3,6 +3,10 @@
     package="com.example.documenttracker">
 
     <!-- Permissions -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
 
@@ -37,6 +41,8 @@
         <activity android:name=".ui.document.AddDocumentActivity" android:exported="true" />
         <activity android:name=".ui.document.DocumentListActivity" android:exported="true" />
         <activity android:name=".ui.document.DocumentDetailsActivity" android:exported="true" />
+        <activity android:name=".ui.admin.ManageUsersActivity" />
+        <activity android:name=".ui.admin.AdminDocumentsActivity" />
 
     </application>
 

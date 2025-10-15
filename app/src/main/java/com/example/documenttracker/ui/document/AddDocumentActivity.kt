@@ -5,20 +5,19 @@ import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.example.documenttracker.R
-import com.example.documenttracker.data.model.Document
-import com.example.documenttracker.data.model.User
-import com.example.documenttracker.data.repository.DocumentRepository
-import com.example.documenttracker.utils.QrUtils
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import com.google.zxing.common.BitMatrix
+import java.util.*
 
 class AddDocumentActivity : AppCompatActivity() {
 
-    private val repo = DocumentRepository()
     private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     private lateinit var edtDescription: EditText
     private lateinit var spnRecipients: Spinner
@@ -26,103 +25,72 @@ class AddDocumentActivity : AppCompatActivity() {
     private lateinit var imgQrCode: ImageView
     private lateinit var btnBack: ImageView
 
-    private val userList = mutableListOf<User>()
-    private val userNames = mutableListOf<String>()
-    private var selectedRecipientId: String? = null
+    private var recipientId: String? = null
+    private var qrBitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_document)
 
-        // Initialize UI components
         edtDescription = findViewById(R.id.edtDescription)
         spnRecipients = findViewById(R.id.spnRecipients)
         btnSave = findViewById(R.id.btnSave)
         imgQrCode = findViewById(R.id.imgQrCode)
         btnBack = findViewById(R.id.btnBack)
 
-        // Back navigation
-        btnBack.setOnClickListener {
-            finish()
-        }
+        btnBack.setOnClickListener { finish() }
 
-        // Load recipients list from Firestore
         loadRecipients()
 
-        // Handle Save button click
         btnSave.setOnClickListener {
             val description = edtDescription.text.toString().trim()
-            val senderId = FirebaseAuth.getInstance().currentUser?.uid ?: return@setOnClickListener
-            val recipientId = selectedRecipientId
+            val senderId = auth.currentUser?.uid ?: return@setOnClickListener
+            val recipient = recipientId
 
-            if (description.isEmpty()) {
-                Toast.makeText(this, "Please enter a description", Toast.LENGTH_SHORT).show()
+            if (description.isEmpty() || recipient == null) {
+                Toast.makeText(this, "Please complete all fields.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (recipientId == null) {
-                Toast.makeText(this, "Please select a recipient", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            val trackingNumber = generateTrackingNumber()
 
-            // Generate unique tracking number
-            val trackingNum = System.currentTimeMillis().toString()
-
-            // Create document object
-            val doc = Document(
-                trackingNumber = trackingNum,
-                senderId = senderId,
-                recipientId = recipientId,
-                description = description,
-                ownerId = senderId
+            // ✅ Firestore data with server timestamp
+            val docData = hashMapOf(
+                "trackingNumber" to trackingNumber,
+                "description" to description,
+                "senderId" to senderId,
+                "recipientId" to recipient,
+                "status" to "Created",
+                "ownerId" to senderId,
+                "dateCreated" to FieldValue.serverTimestamp(), // ✅ Timestamp field
+                "history" to emptyList<Map<String, Any>>()
             )
 
-            // Save document to Firestore and generate QR code
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    repo.addDocument(doc)
-                    val qr: Bitmap = QrUtils.generateQrCode(trackingNum)
-
-                    runOnUiThread {
-                        imgQrCode.setImageBitmap(qr)
-                        Toast.makeText(
-                            this@AddDocumentActivity,
-                            "Document Added Successfully!",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        Toast.makeText(
-                            this@AddDocumentActivity,
-                            "Error: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
+            db.collection("documents")
+                .add(docData)
+                .addOnSuccessListener { documentRef ->
+                    Toast.makeText(this, "Document added successfully!", Toast.LENGTH_SHORT).show()
+                    generateAndDisplayQrCode(trackingNumber)
                 }
-            }
+                .addOnFailureListener {
+                    Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
     private fun loadRecipients() {
         db.collection("users").get()
-            .addOnSuccessListener { result ->
-                userList.clear()
-                userNames.clear()
-                for (doc in result.documents) {
-                    val user = doc.toObject(User::class.java)
-                    if (user != null) {
-                        userList.add(user)
-                        userNames.add(user.name)
-                    }
+            .addOnSuccessListener { snapshot ->
+                val userList = mutableListOf<String>()
+                val userIds = mutableListOf<String>()
+
+                for (doc in snapshot.documents) {
+                    val name = doc.getString("name") ?: "(No Name)"
+                    userList.add(name)
+                    userIds.add(doc.id)
                 }
 
-                if (userList.isEmpty()) {
-                    Toast.makeText(this, "No recipients found.", Toast.LENGTH_SHORT).show()
-                    return@addOnSuccessListener
-                }
-
-                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, userNames)
+                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, userList)
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 spnRecipients.adapter = adapter
 
@@ -133,16 +101,40 @@ class AddDocumentActivity : AppCompatActivity() {
                         position: Int,
                         id: Long
                     ) {
-                        selectedRecipientId = result.documents[position].id
+                        recipientId = userIds[position]
                     }
 
                     override fun onNothingSelected(parent: AdapterView<*>?) {
-                        selectedRecipientId = null
+                        recipientId = null
                     }
                 }
             }
             .addOnFailureListener {
-                Toast.makeText(this, "Failed to load recipients", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Error loading recipients: ${it.message}", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    private fun generateTrackingNumber(): String {
+        val random = (100000..999999).random()
+        return "DOC-$random"
+    }
+
+    private fun generateAndDisplayQrCode(data: String) {
+        try {
+            val bitMatrix: BitMatrix =
+                MultiFormatWriter().encode(data, BarcodeFormat.QR_CODE, 400, 400)
+            val width = bitMatrix.width
+            val height = bitMatrix.height
+            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+            for (x in 0 until width) {
+                for (y in 0 until height) {
+                    bmp.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                }
+            }
+            qrBitmap = bmp
+            imgQrCode.setImageBitmap(bmp)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error generating QR code: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }

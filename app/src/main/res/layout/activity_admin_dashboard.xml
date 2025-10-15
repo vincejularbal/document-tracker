@@ -1,15 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:padding="32dp"
+    android:gravity="center">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Admin Dashboard"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="40dp" />
 
     <Button
-        android:id="@+id/btnAllDocuments"
+        android:id="@+id/btnViewDocuments"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="View All Documents" />
+        android:text="View All Documents"
+        android:layout_marginBottom="20dp" />
+
+    <Button
+        android:id="@+id/btnManageUsers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Manage Users"
+        android:layout_marginBottom="20dp" />
 
     <Button
         android:id="@+id/btnLogout"

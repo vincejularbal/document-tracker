@@ -8,4 +8,11 @@
         <item>Lost</item>
     </string-array>
 
+    <string name="firebase_api_key">AIzaSyCKRqa_WxWG2kP5Z97IDnCtkhgTWo9xw-s</string>
+    <string name="firebase_app_id">1:12772443873:android:cfac527629123e1e00d9a0</string>
+    <string name="firebase_project_id">documenttracker-e53c4</string>
+    <string name="firebase_storage_bucket">documenttracker-e53c4.firebasestorage.app</string>
+    <string name="firebase_database_url">https://documenttracker-e53c4.firebaseio.com</string>
+
+
 </resources>
